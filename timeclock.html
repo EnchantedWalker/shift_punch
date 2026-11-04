@@ -234,6 +234,16 @@ td.pay { color: var(--work); font-weight: 500; }
     const raw = localStorage.getItem(LS_KEY);
     if (raw) { const p = JSON.parse(raw); days = p.days || {}; settings = { ...settings, ...(p.settings || {}) }; }
   } catch (e) {}
+  // Entries added by hand may carry a local clock time ("HH:MM", plus nextDay) instead of a timestamp.
+  function normEvents(k, events) {
+    const [y, m, d] = k.split("-").map(Number);
+    return (events || []).map((e) => {
+      if (typeof e.at === "number") return e;
+      if (typeof e.time !== "string") return null;
+      const [h, mi] = e.time.split(":").map(Number);
+      return { t: e.t, at: new Date(y, m - 1, d + (e.nextDay ? 1 : 0), h, mi).getTime() };
+    }).filter(Boolean);
+  }
   const cacheLocal = () => { try { localStorage.setItem(LS_KEY, JSON.stringify({ days, settings })); } catch (e) {} };
 
   // ---------- date helpers ----------
@@ -274,7 +284,7 @@ td.pay { color: var(--work); font-weight: 500; }
   async function saveDay(k) {
     cacheLocal();
     if (!db) return;
-    const ref = db.doc(`${base}/days/${k}`);
+    const ref = db.doc(`${base}/timesheet/days/${k}`);
     try {
       if (!days[k] || !days[k].events.length) await ref.delete();
       else await ref.set({ events: days[k].events });
@@ -283,7 +293,7 @@ td.pay { color: var(--work); font-weight: 500; }
   async function saveSettings() {
     cacheLocal();
     if (!db) return;
-    try { await db.doc(`${base}/settings/main`).set({ rate: rate(), openDay: settings.openDay || null }); }
+    try { await db.doc(`${base}/settings`).set({ rate: rate(), openDay: settings.openDay || null }); }
     catch (e) { showSync("Couldn't save settings to your account."); }
   }
   function showSync(t) { $("sync").textContent = t; }
@@ -298,18 +308,18 @@ td.pay { color: var(--work); font-weight: 500; }
     showSync("Syncing…");
     const timer = setTimeout(() => showSync("Can't reach your account yet. Saving on this device."), 10000);
     let first = true;
-    db.collection(`${base}/days`).onSnapshot((snap) => {
+    db.collection(`${base}/timesheet/days`).onSnapshot((snap) => {
       const remote = {};
-      snap.docs.forEach((doc) => { const v = doc.data(); if (v && Array.isArray(v.events)) remote[doc.id] = { events: v.events }; });
+      snap.docs.forEach((doc) => { const v = doc.data(); if (v && Array.isArray(v.events)) remote[doc.id] = { events: normEvents(doc.id, v.events) }; });
       if (first && !snap.metadata.fromCache) {
         first = false;
         // Push any punches made on this device before the account was reachable.
-        for (const k of Object.keys(days)) if (!remote[k] && days[k].events.length) { remote[k] = days[k]; db.doc(`${base}/days/${k}`).set({ events: days[k].events }).catch(() => {}); }
+        for (const k of Object.keys(days)) if (!remote[k] && days[k].events.length) { remote[k] = days[k]; db.doc(`${base}/timesheet/days/${k}`).set({ events: days[k].events }).catch(() => {}); }
       }
       days = remote; cacheLocal(); render();
       if (!snap.metadata.fromCache) { clearTimeout(timer); showSync("Saved to your account"); }
     }, () => { clearTimeout(timer); showSync("Sync stopped. Saving on this device."); });
-    db.doc(`${base}/settings/main`).onSnapshot((snap) => {
+    db.doc(`${base}/settings`).onSnapshot((snap) => {
       if (snap.exists) { const v = snap.data(); settings = { rate: v.rate ?? 15, openDay: v.openDay ?? null }; cacheLocal(); $("rate").value = rate(); render(); }
       else if (!snap.metadata.fromCache) saveSettings();
     }, () => {});
