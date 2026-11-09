@@ -2,31 +2,39 @@ rules_version = '2';
 
 // Shift Punch security rules.
 //
-// users/{uid}                 a person's settings: name, pay rate, open shift, and
-//                             `leaders`: { leaderUid: membershipId } for groups they joined
+// users/{uid}                 a person's settings: name, pay rate, open shift
 // users/{uid}/days/{date}     that person's punches for one day
-// groups/{gid}                a group: name, leaderUid
-// memberships/{gid}_{email}   one invite or member of a group
+// groups/{gid}                a group: name, leaderUid, and (during a handoff)
+//                             pendingLeaderUid / pendingLeaderEmail / pendingKeepOld
+// memberships/{gid}_{email}   one invite or member of a group; leaderUid always
+//                             matches the group's current leader
+// access/{memberUid}_{leaderUid}
+//                             a pointer to the membership that links a member to a
+//                             leader. It grants nothing by itself: the membership
+//                             it points to must name both people and be "joined".
 //
 // A leader can READ a member's punches only while that member has accepted the
-// invite (status "joined"). Nobody but the member can change their punches.
+// invite. Nobody but the member can change their punches. Leadership moves only
+// when the current leader offers it to a joined member and that person accepts.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
     function myEmail() { return request.auth.token.email.lower(); }
     function verified() { return request.auth.token.email_verified == true; }
-    function doc(path) { return get(path).data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
+    function membershipLinks(mid, uid) {
+      let m = /databases/$(database)/documents/memberships/$(mid);
+      return exists(m)
+        && get(m).data.uid == uid
+        && get(m).data.status == 'joined'
+        && get(m).data.leaderUid == request.auth.uid;
+    }
     // True when the signed-in person leads a group this user has joined.
     function isLeaderOf(uid) {
-      let u = get(/databases/$(database)/documents/users/$(uid));
-      let mid = u == null ? '' : u.data.get('leaders', {}).get(request.auth.uid, '');
-      return mid != ''
-        && exists(/databases/$(database)/documents/memberships/$(mid))
-        && doc(/databases/$(database)/documents/memberships/$(mid)).uid == uid
-        && doc(/databases/$(database)/documents/memberships/$(mid)).status == 'joined'
-        && doc(/databases/$(database)/documents/memberships/$(mid)).leaderUid == request.auth.uid;
+      let a = /databases/$(database)/documents/access/$(uid + '_' + request.auth.uid);
+      return exists(a) && membershipLinks(get(a).data.mid, uid);
     }
 
     match /users/{uid} {
@@ -38,47 +46,95 @@ service cloud.firestore {
       }
     }
 
+    match /access/{id} {
+      allow read: if signedIn() && (resource.data.leaderUid == request.auth.uid || resource.data.memberUid == request.auth.uid);
+      allow create, update: if signedIn()
+        && request.resource.data.leaderUid == request.auth.uid
+        && request.resource.data.memberUid is string
+        && request.resource.data.mid is string
+        && id == request.resource.data.memberUid + '_' + request.auth.uid;
+      allow delete: if signedIn() && (resource.data.leaderUid == request.auth.uid || resource.data.memberUid == request.auth.uid);
+    }
+
     match /groups/{gid} {
+      function isJoinedMember(email, uid) {
+        let m = /databases/$(database)/documents/memberships/$(gid + '_' + email);
+        return email is string && exists(m) && get(m).data.uid == uid && get(m).data.status == 'joined';
+      }
+      function noPending() { return request.resource.data.get('pendingLeaderUid', null) == null; }
+
       allow create: if signedIn()
         && request.resource.data.leaderUid == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 80;
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.get('pendingLeaderUid', null) == null;
+
       allow read: if signedIn() && (
         resource.data.leaderUid == request.auth.uid
+        || resource.data.get('pendingLeaderUid', null) == request.auth.uid
         || exists(/databases/$(database)/documents/memberships/$(gid + '_' + myEmail())));
-      allow update: if signedIn()
-        && resource.data.leaderUid == request.auth.uid
-        && request.resource.data.leaderUid == request.auth.uid;
+
+      allow update: if signedIn() && (
+        // The leader offers the group to a joined member, or cancels the offer.
+        (resource.data.leaderUid == request.auth.uid
+          && request.resource.data.leaderUid == request.auth.uid
+          && changed().hasOnly(['pendingLeaderUid', 'pendingLeaderEmail', 'pendingKeepOld'])
+          && (noPending()
+            || (request.resource.data.pendingLeaderUid != request.auth.uid
+              && isJoinedMember(request.resource.data.pendingLeaderEmail, request.resource.data.pendingLeaderUid))))
+        // The person offered the group accepts it.
+        || (verified()
+          && resource.data.get('pendingLeaderUid', null) == request.auth.uid
+          && isJoinedMember(myEmail(), request.auth.uid)
+          && request.resource.data.leaderUid == request.auth.uid
+          && request.resource.data.leaderEmail == myEmail()
+          && noPending()
+          && changed().hasOnly(['leaderUid', 'leaderEmail', 'pendingLeaderUid', 'pendingLeaderEmail', 'pendingKeepOld']))
+        // The person offered the group turns it down.
+        || (resource.data.get('pendingLeaderUid', null) == request.auth.uid
+          && noPending()
+          && changed().hasOnly(['pendingLeaderUid', 'pendingLeaderEmail', 'pendingKeepOld'])));
+
       allow delete: if signedIn() && resource.data.leaderUid == request.auth.uid;
     }
 
     match /memberships/{mid} {
       // Only a group's leader adds people, and only as a pending invite.
+      // getAfter lets a brand-new leader invite the old leader in the same handoff.
       allow create: if signedIn()
         && request.resource.data.leaderUid == request.auth.uid
-        && doc(/databases/$(database)/documents/groups/$(request.resource.data.gid)).leaderUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.leaderUid == request.auth.uid
         && request.resource.data.email is string
         && request.resource.data.email == request.resource.data.email.lower()
         && mid == request.resource.data.gid + '_' + request.resource.data.email
         && request.resource.data.status == 'invited'
         && request.resource.data.uid == null;
 
+      // The leader, the person invited, and (during a handoff) the person
+      // offered the group, who needs the list to take everyone over.
       allow read: if signedIn() && (
         resource.data.leaderUid == request.auth.uid
         || resource.data.email == myEmail()
-        || resource.data.uid == request.auth.uid);
+        || resource.data.uid == request.auth.uid
+        || get(/databases/$(database)/documents/groups/$(resource.data.gid)).data.get('pendingLeaderUid', null) == request.auth.uid);
 
-      // The leader may change the pay rate they use for this member.
-      // The invited person (with a verified email) may accept.
       allow update: if signedIn() && (
+        // The leader may change the pay rate they use for this member.
         (resource.data.leaderUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rate']))
+          && changed().hasOnly(['rate']))
+        // The invited person (with a confirmed email) may accept.
         || (verified()
           && resource.data.email == myEmail()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'uid', 'name', 'joinedAt'])
+          && changed().hasOnly(['status', 'uid', 'name', 'joinedAt'])
           && request.resource.data.status == 'joined'
-          && request.resource.data.uid == request.auth.uid));
+          && request.resource.data.uid == request.auth.uid)
+        // A new leader points the group's memberships at themselves, in the
+        // same write that makes them leader.
+        || (getAfter(/databases/$(database)/documents/groups/$(resource.data.gid)).data.leaderUid == request.auth.uid
+          && request.resource.data.leaderUid == request.auth.uid
+          && request.resource.data.leaderEmail == myEmail()
+          && changed().hasOnly(['leaderUid', 'leaderEmail'])));
 
       // The leader can remove anyone; a person can decline or leave.
       allow delete: if signedIn() && (

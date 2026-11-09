@@ -69,6 +69,7 @@ let days = {};                       // my days: { key: { events } }
 let myMemberships = [];              // invites to me / groups I joined
 let ledGroups = [];                  // groups I lead
 let ledMemberships = [];             // everyone in groups I lead
+let offers = [];                     // groups someone wants me to take over
 const memberDays = {};               // uid -> days (members of my groups)
 const memberSubs = {};               // uid -> unsubscribe
 let subs = [];
@@ -119,7 +120,7 @@ $("auth-form").onsubmit = async (e) => {
     else if (authMode === "signup") {
       const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
       await A.updateProfile(cred.user, { displayName: name });
-      await F.setDoc(F.doc(db, "users", cred.user.uid), { name, email, rate: DEFAULT_RATE, openDay: null, leaders: {} }, { merge: true });
+      await F.setDoc(F.doc(db, "users", cred.user.uid), { name, email, rate: DEFAULT_RATE, openDay: null }, { merge: true });
       A.sendEmailVerification(cred.user).catch(() => {});
     } else {
       await A.sendPasswordResetEmail(auth, email);
@@ -166,6 +167,11 @@ A.onAuthStateChanged(auth, (u) => {
     renderGroup();
   }, report("Couldn't load your groups.")));
 
+  subs.push(F.onSnapshot(F.query(F.collection(db, "groups"), F.where("pendingLeaderUid", "==", u.uid)), (s) => {
+    offers = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderGroup();
+  }, report("Couldn't load leadership offers.")));
+
   subs.push(F.onSnapshot(F.query(F.collection(db, "memberships"), F.where("leaderUid", "==", u.uid)), (s) => {
     ledMemberships = s.docs.map((d) => ({ id: d.id, ...d.data() }));
     syncMemberSubs();
@@ -181,11 +187,20 @@ function syncMemberSubs() {
   for (const uid of Object.keys(memberSubs)) if (!want.has(uid)) { memberSubs[uid](); delete memberSubs[uid]; delete memberDays[uid]; }
   for (const uid of want) {
     if (memberSubs[uid]) continue;
+    const m = ledMemberships.find((x) => x.status === "joined" && x.uid === uid);
     memberDays[uid] = null; // loading
-    memberSubs[uid] = F.onSnapshot(F.collection(db, "users", uid, "days"), (s) => {
-      const d = {}; s.forEach((x) => { const v = x.data(); if (Array.isArray(v.events)) d[x.id] = { events: v.events }; });
-      memberDays[uid] = d; renderGroup();
-    }, () => { memberDays[uid] = "denied"; renderGroup(); });
+    let unsub = null, stopped = false;
+    memberSubs[uid] = () => { stopped = true; if (unsub) unsub(); };
+    // The security rules look up this pointer to confirm the member joined a group I lead.
+    F.setDoc(F.doc(db, "access", `${uid}_${me.uid}`), { leaderUid: me.uid, memberUid: uid, mid: m.id })
+      .catch(() => {})
+      .then(() => {
+        if (stopped) return;
+        unsub = F.onSnapshot(F.collection(db, "users", uid, "days"), (s) => {
+          const d = {}; s.forEach((x) => { const v = x.data(); if (Array.isArray(v.events)) d[x.id] = { events: v.events }; });
+          memberDays[uid] = d; renderGroup();
+        }, () => { memberDays[uid] = "denied"; renderGroup(); });
+      });
   }
 }
 
@@ -438,12 +453,16 @@ function renderGroup() {
   const root = $("view-group");
   if (!me || root.hidden) return;
   // Keep typed text and focus when live data re-renders the view.
-  const keep = {}; root.querySelectorAll("input[id]").forEach((i) => (keep[i.id] = i.value));
+  const keep = {}; root.querySelectorAll("input[id], select[id]").forEach((i) => (keep[i.id] = i.type === "checkbox" ? i.checked : i.value));
   const focusId = document.activeElement && root.contains(document.activeElement) ? document.activeElement.id : null;
   if (groupNav.mid) root.innerHTML = memberDetailHTML();
   else if (groupNav.gid) root.innerHTML = groupDetailHTML();
   else root.innerHTML = groupHomeHTML();
-  Object.entries(keep).forEach(([id, v]) => { const el = $(id); if (el && (id !== "m-rate" || id === focusId)) el.value = v; });
+  Object.entries(keep).forEach(([id, v]) => {
+    const el = $(id); if (!el || (id === "m-rate" && id !== focusId)) return;
+    if (el.type === "checkbox") el.checked = v;
+    else if (el.tagName !== "SELECT" || [...el.options].some((o) => o.value === v)) el.value = v;
+  });
   if (focusId && $(focusId)) $(focusId).focus();
   wireSeg(root);
   wireGroup(root);
@@ -458,6 +477,11 @@ function verifyBannerHTML() {
 function groupHomeHTML() {
   const inv = pending(), mine = joined();
   let h = "";
+  if (offers.length) {
+    h += `<div class="card"><h2>Lead a group?</h2>${verifyBannerHTML()}<div class="list">${offers.map((g) => `
+      <div class="list-row"><div><b>${esc(g.name)}</b><div class="sub">${esc(g.leaderEmail || "The leader")} wants you to take over. You'd see everyone's punches, hours and pay, and add or remove people.${g.pendingKeepOld ? " They'd stay in the group as a member." : ""}</div></div>
+      <div class="inline-form"><button class="btn small" data-act="offer-decline" data-id="${esc(g.id)}">No thanks</button><button class="btn small primary" data-act="offer-accept" data-id="${esc(g.id)}" ${me.emailVerified ? "" : "disabled"}>Take over</button></div></div>`).join("")}</div></div>`;
+  }
   if (inv.length) {
     h += `<div class="card"><h2>Invitations</h2>${verifyBannerHTML()}<div class="list">${inv.map((m) => `
       <div class="list-row"><div><b>${esc(m.groupName)}</b><div class="sub">From ${esc(m.leaderEmail)} · they'll see your punches, hours and pay</div></div>
@@ -509,8 +533,27 @@ function groupDetailHTML() {
     <div class="err" id="add-err"></div>
     <div class="sub">They'll see the invite after they sign in to Shift Punch with that email. The number is their hourly rate, used for the pay you see here.</div>
     <button class="btn small" data-act="copy-invite" data-id="${esc(g.id)}" style="justify-self:start">Copy an invite message to send them</button></div>`;
+  h += handoffHTML(g, ms);
   h += `<button class="btn danger" data-act="delete-group" data-id="${esc(g.id)}" style="justify-self:start">Delete this group</button>`;
   return h;
+}
+
+function handoffHTML(g, ms) {
+  let h = `<div class="card"><h2>Hand off this group</h2>`;
+  if (g.pendingLeaderUid) {
+    const who = ms.find((m) => m.uid === g.pendingLeaderUid);
+    h += `<div class="sub">Waiting for <b>${esc(who ? display(who) : g.pendingLeaderEmail)}</b> to accept. You stay the leader until they do.${g.pendingKeepOld ? " After that you'll get an invite to stay as a member." : ""}</div>
+      <button class="btn small" data-act="offer-cancel" data-id="${esc(g.id)}" style="justify-self:start">Cancel the offer</button>`;
+  } else {
+    const eligible = ms.filter((m) => m.status === "joined" && m.uid && m.uid !== me.uid);
+    if (!eligible.length) h += `<div class="sub">You can make someone else the leader once they've joined the group.</div>`;
+    else h += `<div class="sub">Pick someone who has joined. They'll need to accept, then they become the leader: they see everyone's hours and pay, and you no longer do.</div>
+      <form class="inline-form" data-form="handoff">
+        <select id="handoff-to" aria-label="New leader" style="flex:1 1 180px;min-width:0;font:16px var(--body);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">${eligible.map((m) => `<option value="${esc(m.id)}">${esc(display(m))}</option>`).join("")}</select>
+        <button class="btn primary" type="submit">Offer leadership</button></form>
+      <label class="sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="handoff-keep" checked> Stay in the group as a member (they'll see your hours)</label>`;
+  }
+  return h + `</div>`;
 }
 
 function memberDetailHTML() {
@@ -575,6 +618,14 @@ function wireGroup(root) {
       toast(`Invited ${email}`, false);
     } catch (err) { report("Couldn't add that person. Try again.")(err); }
   };
+  const ho = root.querySelector('[data-form="handoff"]');
+  if (ho) ho.onsubmit = (e) => {
+    e.preventDefault();
+    const m = ledMemberships.find((x) => x.id === $("handoff-to").value);
+    if (!m) return;
+    F.updateDoc(F.doc(db, "groups", groupNav.gid), { pendingLeaderUid: m.uid, pendingLeaderEmail: m.email, pendingKeepOld: $("handoff-keep").checked })
+      .then(() => toast(`Asked ${display(m)} to take over`, false), report("Couldn't send the offer. Try again."));
+  };
   const mr = $("m-rate");
   if (mr) mr.onchange = () => {
     F.updateDoc(F.doc(db, "memberships", groupNav.mid), { rate: numRate(mr.value) }).then(() => toast("Rate saved", false), report("Couldn't save the rate."));
@@ -591,10 +642,7 @@ function wireGroup(root) {
         b.disabled = true;
         try {
           await me.getIdToken(true);
-          const batch = F.writeBatch(db);
-          batch.update(F.doc(db, "memberships", id), { status: "joined", uid: me.uid, name: profile.name || me.displayName || "", joinedAt: Date.now() });
-          batch.set(userRef(), { leaders: { [m.leaderUid]: id } }, { merge: true });
-          await batch.commit();
+          await F.updateDoc(F.doc(db, "memberships", id), { status: "joined", uid: me.uid, name: profile.name || me.displayName || "", joinedAt: Date.now() });
           toast(`You joined ${m.groupName}`, false);
         } catch (err) { b.disabled = false; report("Couldn't join. Confirm your email first, then try again.")(err); }
         break;
@@ -607,10 +655,7 @@ function wireGroup(root) {
       case "leave": {
         if (!armed(b, "Tap again to leave")) return;
         const m = myMemberships.find((x) => x.id === id); if (!m) return;
-        const batch = F.writeBatch(db);
-        batch.delete(F.doc(db, "memberships", id));
-        if (profile.leaders[m.leaderUid] === id) batch.set(userRef(), { leaders: { [m.leaderUid]: F.deleteField() } }, { merge: true });
-        batch.commit().then(() => toast(`You left ${m.groupName}`, false), report("Couldn't leave the group. Try again."));
+        F.deleteDoc(F.doc(db, "memberships", id)).then(() => toast(`You left ${m.groupName}`, false), report("Couldn't leave the group. Try again."));
         break;
       }
       case "verified": {
@@ -630,9 +675,26 @@ function wireGroup(root) {
       }
       case "remove-member": {
         if (!armed(b, "Tap again to remove")) return;
-        F.deleteDoc(F.doc(db, "memberships", id)).then(() => { groupNav.mid = null; renderGroup(); toast("Removed from group", false); }, report("Couldn't remove them. Try again."));
+        const m = ledMemberships.find((x) => x.id === id);
+        const g = m && ledGroups.find((x) => x.id === m.gid);
+        const batch = F.writeBatch(db);
+        batch.delete(F.doc(db, "memberships", id));
+        if (g && m.uid && g.pendingLeaderUid === m.uid) batch.update(F.doc(db, "groups", g.id), { pendingLeaderUid: null, pendingLeaderEmail: null, pendingKeepOld: null });
+        batch.commit().then(() => { groupNav.mid = null; renderGroup(); toast("Removed from group", false); }, report("Couldn't remove them. Try again."));
         break;
       }
+      case "offer-cancel": {
+        F.updateDoc(F.doc(db, "groups", id), { pendingLeaderUid: null, pendingLeaderEmail: null, pendingKeepOld: null })
+          .then(() => toast("Offer cancelled", false), report("Couldn't cancel the offer. Try again."));
+        break;
+      }
+      case "offer-decline": {
+        if (!armed(b, "Tap again")) return;
+        F.updateDoc(F.doc(db, "groups", id), { pendingLeaderUid: null, pendingLeaderEmail: null, pendingKeepOld: null })
+          .then(() => toast("Offer turned down", false), report("Couldn't turn it down. Try again."));
+        break;
+      }
+      case "offer-accept": await takeOver(id, b); break;
       case "delete-group": {
         if (!armed(b, "Tap again to delete the group")) return;
         const batch = F.writeBatch(db);
@@ -643,6 +705,35 @@ function wireGroup(root) {
       }
     }
   }));
+}
+
+// Become leader of a group someone offered me: in one write, take the group,
+// point every membership at me, set up access to joined members, drop my own
+// membership, and invite the old leader back if they asked to stay.
+async function takeOver(gid, btn) {
+  const g = offers.find((x) => x.id === gid); if (!g) return;
+  btn.disabled = true;
+  try {
+    await me.getIdToken(true);
+    const myEmail = cleanEmail(me.email);
+    const snap = await F.getDocs(F.query(F.collection(db, "memberships"), F.where("gid", "==", gid)));
+    const batch = F.writeBatch(db);
+    batch.update(F.doc(db, "groups", gid), { leaderUid: me.uid, leaderEmail: myEmail, pendingLeaderUid: null, pendingLeaderEmail: null, pendingKeepOld: null });
+    snap.forEach((d) => {
+      const m = d.data();
+      if (m.uid === me.uid || m.email === myEmail) { batch.delete(d.ref); return; }
+      batch.update(d.ref, { leaderUid: me.uid, leaderEmail: myEmail });
+      if (m.status === "joined" && m.uid) batch.set(F.doc(db, "access", `${m.uid}_${me.uid}`), { leaderUid: me.uid, memberUid: m.uid, mid: d.id });
+    });
+    const oldEmail = cleanEmail(g.leaderEmail);
+    if (g.pendingKeepOld && oldEmail && !snap.docs.some((d) => d.id === `${gid}_${oldEmail}`)) {
+      batch.set(F.doc(db, "memberships", `${gid}_${oldEmail}`), { gid, groupName: g.name, email: oldEmail, leaderUid: me.uid, leaderEmail: myEmail, status: "invited", uid: null, rate: DEFAULT_RATE, addedAt: Date.now() });
+    }
+    await batch.commit();
+    groupNav = { gid, mid: null };
+    toast(`You lead ${g.name} now`, false);
+    renderGroup();
+  } catch (err) { btn.disabled = false; report("Couldn't take over the group. Confirm your email first, then try again.")(err); }
 }
 
 // ---------------------------------------------------------------- account panel

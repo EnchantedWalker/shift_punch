@@ -109,16 +109,40 @@ await boss.screenshot({ path: `${SHOTS}/06-leader-member.png`, fullPage: true })
 const memberTotals = (await boss.textContent("#view-group .totals")).replace(/\s+/g, " ").trim();
 step(`leader's view of member: ${memberTotals}`);
 
-// Member leaves -> leader loses access
+// Handoff: the boss offers the group to Ann and stays on as a member
+await boss.click('[data-act="back-group"]');
+await boss.waitForSelector('[data-form="handoff"]');
+await boss.screenshot({ path: `${SHOTS}/07-handoff-offer.png`, fullPage: true });
+await boss.click('[data-form="handoff"] button');
+await boss.waitForSelector('[data-act="offer-cancel"]');
+step("leader offered the group to Ann");
 await tab(ann, "group");
-await ann.click('[data-act="leave"]'); await ann.click('[data-act="leave"]');
-await boss.waitForSelector('text=All groups').catch(() => {});
-await boss.waitForTimeout(1500);
-const after = await boss.locator("tr[data-mid]").count();
-step(`after member leaves, leader's group shows ${after} member rows`);
+await ann.waitForSelector('[data-act="offer-accept"]');
+await ann.screenshot({ path: `${SHOTS}/08-handoff-received.png`, fullPage: true });
+await ann.click('[data-act="offer-accept"]');
+await ann.waitForSelector("text=You lead");
+step("Ann accepted and now leads the group");
+await boss.waitForSelector('[data-act="accept"]', { timeout: 10000 });
+const bossLeads = await boss.locator('[data-act="open-group"]').count();
+step(`old leader: leads ${bossLeads} groups now, and has an invite to stay`);
+await verifyEmail("boss@example.com");
+await boss.click('[data-act="verified"]');
+await boss.waitForSelector('[data-act="accept"]:not([disabled])');
+await boss.click('[data-act="accept"]');
+await boss.waitForSelector('[data-act="leave"]');
+await ann.waitForSelector("tr[data-mid] td.pay", { timeout: 10000 });
+const annRow = (await ann.textContent("tr[data-mid]")).replace(/\s+/g, " ").trim();
+step(`new leader sees the old leader as a member: ${annRow}`);
+await ann.screenshot({ path: `${SHOTS}/09-new-leader.png`, fullPage: true });
+
+// Old leader leaves -> new leader loses access to their hours
+await boss.click('[data-act="leave"]'); await boss.click('[data-act="leave"]');
+await ann.waitForTimeout(1500);
+const after = await ann.locator("tr[data-mid]").count();
+step(`after the old leader leaves, the new leader's group shows ${after} member rows`);
 
 console.log(errors.length ? "\nERRORS:\n" + errors.join("\n") : "\nno page errors");
 await browser.close();
-const ok = disabled && annHours === "8.00" && /8\.00/.test(row) && /\$136\.00/.test(row) && after === 0 && !errors.length;
+const ok = disabled && annHours === "8.00" && /8\.00/.test(row) && /\$136\.00/.test(row) && bossLeads === 0 && /Iman/.test(annRow) && after === 0 && !errors.length;
 console.log(ok ? "E2E PASSED" : "E2E FAILED");
 process.exit(ok ? 0 : 1);

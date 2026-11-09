@@ -187,3 +187,4 @@ table.compact td:first-child { white-space: normal; }
 .install > div { min-width: 0; }
 .install-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
 .install .share-glyph { display: inline-block; width: 15px; height: 15px; vertical-align: -2px; }
+.btn.small { white-space: nowrap; }
