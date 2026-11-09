@@ -59,6 +59,7 @@ await boss.waitForSelector("#add-email");
 step("leader started a group");
 await boss.fill("#add-email", "Ann@Example.com");
 await boss.fill("#add-rate", "17");
+await boss.waitForTimeout(800); // let live updates redraw the form; the typed rate must survive
 await boss.click('[data-form="add-member"] button');
 await boss.waitForSelector("text=Hasn't joined yet");
 step("leader invited ann@example.com at $17/hr");

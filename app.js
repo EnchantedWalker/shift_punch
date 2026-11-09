@@ -443,7 +443,7 @@ function renderGroup() {
   if (groupNav.mid) root.innerHTML = memberDetailHTML();
   else if (groupNav.gid) root.innerHTML = groupDetailHTML();
   else root.innerHTML = groupHomeHTML();
-  Object.entries(keep).forEach(([id, v]) => { const el = $(id); if (el && el.type !== "number") el.value = v; });
+  Object.entries(keep).forEach(([id, v]) => { const el = $(id); if (el && (id !== "m-rate" || id === focusId)) el.value = v; });
   if (focusId && $(focusId)) $(focusId).focus();
   wireSeg(root);
   wireGroup(root);
