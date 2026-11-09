@@ -180,3 +180,10 @@ table.compact { min-width: 0; }
 table.compact td small { white-space: normal; overflow-wrap: anywhere; }
 table.compact td:first-child { white-space: normal; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* install prompt */
+.install { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; grid-template-columns: 44px 1fr; gap: 10px 12px; align-items: center; }
+.install img { border-radius: 10px; display: block; }
+.install > div { min-width: 0; }
+.install-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.install .share-glyph { display: inline-block; width: 15px; height: 15px; vertical-align: -2px; }

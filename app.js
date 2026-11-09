@@ -703,3 +703,38 @@ setInterval(() => {
   // Running shifts tick up; refresh the tables every 30 seconds rather than every second.
   if (ticks % 30 === 0) { if (!$("view-sheet").hidden && profile.openDay) renderSheet(); if (!$("view-group").hidden && !document.activeElement?.matches("input")) renderGroup(); }
 }, 1000);
+
+// ---------------------------------------------------------------- install as an app
+(() => {
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if (standalone) return;
+  const box = $("install");
+  let dismissedUntil = 0;
+  try { dismissedUntil = Number(localStorage.getItem("shiftpunch.installLater")) || 0; } catch (e) {}
+  if (Date.now() < dismissedUntil) return;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let deferred = null;
+
+  $("install-later").onclick = () => {
+    box.hidden = true;
+    try { localStorage.setItem("shiftpunch.installLater", String(Date.now() + 14 * 86400000)); } catch (e) {}
+  };
+  if (isIOS) {
+    $("install-how").innerHTML = `Tap <b>Share</b> <svg class="share-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-label="Share icon"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5"/><path d="M5 11v9h14v-9"/></svg> at the bottom (or top) of the browser, then <b>Add to Home Screen</b>.`;
+    $("install-go").hidden = true;
+    $("install-later").textContent = "Got it";
+    box.hidden = false;
+  }
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); deferred = e;
+    $("install-go").hidden = false; box.hidden = false;
+  });
+  $("install-go").onclick = async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    const { outcome } = await deferred.userChoice.catch(() => ({}));
+    deferred = null;
+    if (outcome === "accepted") box.hidden = true;
+  };
+  window.addEventListener("appinstalled", () => { box.hidden = true; toast("Shift Punch is on your home screen", false); });
+})();

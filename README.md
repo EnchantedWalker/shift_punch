@@ -8,6 +8,7 @@ A phone-friendly time clock. Clock in and out, log meal breaks, and see a timesh
 - `index.html`, `styles.css`, `app.js`: the app
 - `firebase-config.js`: your Firebase project's settings (see `SETUP.md`)
 - `firestore.rules`: who can see and change what. Paste it into the Firebase console.
+- `manifest.webmanifest`, `sw.js`, `icons/`: what makes it installable on a phone and able to open with no signal
 - `tests/`: security-rule tests and a two-person walkthrough, both run on Firebase's local emulators
 
 To get it running, follow `SETUP.md`.
