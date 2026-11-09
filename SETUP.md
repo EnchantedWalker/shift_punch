@@ -10,7 +10,6 @@ Shift Punch keeps everyone's hours in Firebase, Google's free app database. You 
 ## 2. Turn on email sign-in
 1. In the left menu, open **Build → Authentication**, then tap **Get started**.
 2. Under **Sign-in method**, choose **Email/Password**, switch on the first toggle (**Email/Password**) and **Save**. Leave "Email link" off.
-3. Open the **Settings** tab → **Authorized domains** → **Add domain** and add `enchantedwalker.github.io`.
 
 ## 3. Create the database
 1. In the left menu, open **Build → Firestore Database**, then tap **Create database**.
