@@ -1,0 +1,90 @@
+rules_version = '2';
+
+// Shift Punch security rules.
+//
+// users/{uid}                 a person's settings: name, pay rate, open shift, and
+//                             `leaders`: { leaderUid: membershipId } for groups they joined
+// users/{uid}/days/{date}     that person's punches for one day
+// groups/{gid}                a group: name, leaderUid
+// memberships/{gid}_{email}   one invite or member of a group
+//
+// A leader can READ a member's punches only while that member has accepted the
+// invite (status "joined"). Nobody but the member can change their punches.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function verified() { return request.auth.token.email_verified == true; }
+    function doc(path) { return get(path).data; }
+
+    // True when the signed-in person leads a group this user has joined.
+    function isLeaderOf(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid));
+      let mid = u == null ? '' : u.data.get('leaders', {}).get(request.auth.uid, '');
+      return mid != ''
+        && exists(/databases/$(database)/documents/memberships/$(mid))
+        && doc(/databases/$(database)/documents/memberships/$(mid)).uid == uid
+        && doc(/databases/$(database)/documents/memberships/$(mid)).status == 'joined'
+        && doc(/databases/$(database)/documents/memberships/$(mid)).leaderUid == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+
+      match /days/{day} {
+        allow read: if signedIn() && (request.auth.uid == uid || isLeaderOf(uid));
+        allow write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /groups/{gid} {
+      allow create: if signedIn()
+        && request.resource.data.leaderUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80;
+      allow read: if signedIn() && (
+        resource.data.leaderUid == request.auth.uid
+        || exists(/databases/$(database)/documents/memberships/$(gid + '_' + myEmail())));
+      allow update: if signedIn()
+        && resource.data.leaderUid == request.auth.uid
+        && request.resource.data.leaderUid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.leaderUid == request.auth.uid;
+    }
+
+    match /memberships/{mid} {
+      // Only a group's leader adds people, and only as a pending invite.
+      allow create: if signedIn()
+        && request.resource.data.leaderUid == request.auth.uid
+        && doc(/databases/$(database)/documents/groups/$(request.resource.data.gid)).leaderUid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.email == request.resource.data.email.lower()
+        && mid == request.resource.data.gid + '_' + request.resource.data.email
+        && request.resource.data.status == 'invited'
+        && request.resource.data.uid == null;
+
+      allow read: if signedIn() && (
+        resource.data.leaderUid == request.auth.uid
+        || resource.data.email == myEmail()
+        || resource.data.uid == request.auth.uid);
+
+      // The leader may change the pay rate they use for this member.
+      // The invited person (with a verified email) may accept.
+      allow update: if signedIn() && (
+        (resource.data.leaderUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rate']))
+        || (verified()
+          && resource.data.email == myEmail()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'uid', 'name', 'joinedAt'])
+          && request.resource.data.status == 'joined'
+          && request.resource.data.uid == request.auth.uid));
+
+      // The leader can remove anyone; a person can decline or leave.
+      allow delete: if signedIn() && (
+        resource.data.leaderUid == request.auth.uid
+        || resource.data.email == myEmail()
+        || resource.data.uid == request.auth.uid);
+    }
+  }
+}

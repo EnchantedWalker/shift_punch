@@ -1,153 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f5f8b">
 <title>Shift Punch</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<style>
-/* Layout: one-column phone app, punch-clock face on top, two tabs pinned to the bottom (Clock / Timesheet). */
-:root {
-  --bg: #eef1f3;
-  --card: #ffffff;
-  --ink: #17222b;
-  --muted: #5d6b76;
-  --line: #d5dce1;
-  --accent: #1f5f8b;
-  --accent-ink: #ffffff;
-  --work: #1e7a4c;
-  --work-soft: #dcefe4;
-  --meal: #b0650c;
-  --meal-soft: #f6e6cf;
-  --stop: #b23a32;
-  --stop-soft: #f5dcd9;
-  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
-  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #10171d; --card: #18222a; --ink: #e6edf2; --muted: #93a3af; --line: #2a3742;
-  --accent: #6fb0de; --accent-ink: #0b1620;
-  --work: #57c98d; --work-soft: #173327; --meal: #e9a650; --meal-soft: #3a2a14; --stop: #ef7a70; --stop-soft: #3d1d1b;
-  color-scheme: dark } }
-:root[data-theme="dark"] {
-  --bg: #10171d; --card: #18222a; --ink: #e6edf2; --muted: #93a3af; --line: #2a3742;
-  --accent: #6fb0de; --accent-ink: #0b1620;
-  --work: #57c98d; --work-soft: #173327; --meal: #e9a650; --meal-soft: #3a2a14; --stop: #ef7a70; --stop-soft: #3d1d1b;
-  color-scheme: dark }
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
 
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
-.app { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px calc(96px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 16px; }
-.num { font-variant-numeric: tabular-nums; }
-h1, h2 { font-family: var(--display); font-weight: 700; letter-spacing: .01em; margin: 0; text-wrap: balance; }
-.label { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 600; }
-button { font: inherit; color: inherit; cursor: pointer; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+<!-- Shown until Firebase is configured -->
+<main class="auth" id="view-setup" hidden>
+  <h1>Shift Punch</h1>
+  <div class="form">
+    <b>Almost ready</b>
+    <p>This copy of Shift Punch isn't connected to a database yet. Paste your Firebase settings into <code>firebase-config.js</code>. The steps are in <code>SETUP.md</code>.</p>
+  </div>
+</main>
 
-/* header */
-.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.top h1 { font-size: 26px; text-transform: uppercase; }
-.sync { font-size: 12px; color: var(--muted); }
+<!-- Sign in / create account -->
+<main class="auth" id="view-auth" hidden>
+  <div>
+    <h1>Shift Punch</h1>
+    <p>Clock in, log meal breaks and track your pay.</p>
+  </div>
+  <form class="form" id="auth-form" novalidate>
+    <b id="auth-title" style="font-size:18px">Sign in</b>
+    <div class="field" id="f-name" hidden><label for="a-name">Your name</label><input id="a-name" autocomplete="name"></div>
+    <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="email" inputmode="email"></div>
+    <div class="field" id="f-pass"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="current-password"></div>
+    <div class="err" id="auth-err" role="alert"></div>
+    <div class="ok-msg" id="auth-ok" role="status"></div>
+    <button class="btn primary" id="auth-submit" type="submit">Sign in</button>
+    <button class="linkish" type="button" id="auth-switch">New here? Create an account</button>
+    <button class="linkish" type="button" id="auth-forgot">Forgot password?</button>
+  </form>
+</main>
 
-/* clock face */
-.face { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 18px; display: grid; gap: 14px; }
-.face-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-.now { font-family: var(--display); font-size: clamp(56px, 18vw, 84px); font-weight: 600; line-height: .9; }
-.now small { font-size: .32em; font-weight: 600; margin-left: 6px; color: var(--muted); }
-.date { color: var(--muted); font-size: 14px; }
-.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; }
-.chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
-.chip.out { background: var(--line); color: var(--muted); }
-.chip.in { background: var(--work-soft); color: var(--work); }
-.chip.meal { background: var(--meal-soft); color: var(--meal); }
-.chip.in::before, .chip.meal::before { animation: pulse 1.6s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .3; } }
-@media (prefers-reduced-motion: reduce) { .chip::before { animation: none !important; } }
-.since { font-size: 13px; color: var(--muted); }
-
-/* punch buttons */
-.punches { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.punch { border: 0; border-radius: 12px; padding: 18px 12px; font-family: var(--display); font-size: 24px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; display: grid; gap: 2px; justify-items: center; min-height: 86px; align-content: center; transition: transform .08s; }
-.punch:active { transform: scale(.97); }
-.punch span { font-family: var(--body); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; opacity: .85; }
-.punch.p-in { background: var(--work); color: var(--card); grid-column: 1 / -1; min-height: 110px; font-size: 30px; }
-.punch.p-meal { background: var(--meal); color: var(--card); }
-.punch.p-out { background: var(--stop); color: var(--card); }
-.punch.wide { grid-column: 1 / -1; }
-.punch:disabled { opacity: .35; cursor: not-allowed; }
-
-/* today stats */
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.stat { background: var(--card); padding: 12px 10px; display: grid; gap: 2px; min-width: 0; }
-.stat b { font-family: var(--display); font-size: 28px; font-weight: 600; line-height: 1.05; }
-.stat.pay b { color: var(--work); }
-
-.log { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px 14px; }
-.log-row { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.log-row:last-child { border-bottom: 0; }
-.log-row .t { font-family: var(--mono); font-size: 14px; }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-.empty { color: var(--muted); padding: 14px 0; font-size: 14px; }
-
-/* timesheet */
-.seg { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-.seg button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 500; white-space: nowrap; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.totals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.total { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 2px; }
-.total b { font-family: var(--display); font-size: 30px; font-weight: 600; line-height: 1.05; }
-.total.money { background: var(--work-soft); border-color: transparent; }
-.total.money b { color: var(--work); }
-.sheet-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
-table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13px; }
-th, td { padding: 9px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
-th:first-child, td:first-child { text-align: left; padding-left: 12px; position: sticky; left: 0; background: var(--card); }
-th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; background: var(--card); }
-td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-td:first-child { font-family: var(--body); font-weight: 500; }
-td:first-child small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
-tbody tr.day { cursor: pointer; }
-tbody tr.day:hover td { background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
-tr.open td { color: var(--work); }
-tr.week td { background: var(--bg); font-weight: 600; color: var(--ink); border-bottom: 2px solid var(--line); }
-tr.week td:first-child { background: var(--bg); font-family: var(--body); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
-td.pay { color: var(--work); font-weight: 500; }
-.hint { font-size: 12px; color: var(--muted); }
-.rate-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
-.rate-row input { width: 90px; font: 500 16px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
-.btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 9px 14px; font-weight: 500; }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.danger { color: var(--stop); }
-.sheet-empty { padding: 28px 18px; text-align: center; color: var(--muted); display: grid; gap: 6px; }
-.sheet-empty b { color: var(--ink); font-family: var(--display); font-size: 22px; }
-
-/* bottom tabs */
-.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line); display: flex; justify-content: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); }
-.tabs-in { display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 560px; }
-.tab { border: 0; background: none; padding: 12px 0 14px; display: grid; justify-items: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); }
-.tab svg { width: 24px; height: 24px; }
-.tab[aria-selected="true"] { color: var(--accent); }
-
-/* editor overlay */
-.overlay { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--ink) 45%, transparent); display: flex; align-items: flex-end; justify-content: center; }
-.panel { background: var(--card); width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 12px; max-height: 88%; overflow-y: auto; }
-.panel h2 { font-size: 24px; }
-.ed-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
-.ed-row select, .ed-row input { font: 15px var(--body); padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); min-width: 0; }
-.ed-row input { font-family: var(--mono); }
-.x { border: 0; background: var(--stop-soft); color: var(--stop); width: 38px; height: 38px; border-radius: 8px; font-size: 18px; }
-.actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 30; background: var(--ink); color: var(--bg); padding: 10px 10px 10px 16px; border-radius: 10px; display: flex; gap: 14px; align-items: center; font-size: 14px; width: max-content; max-width: calc(100% - 32px); }
-.toast button { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 4px 8px; filter: brightness(1.4); }
-</style>
-
-<div class="app">
+<div class="app" id="view-app" hidden>
   <header class="top">
     <h1>Shift Punch</h1>
-    <span class="sync" id="sync">Saved on this device</span>
+    <button class="who" id="who" aria-label="Account"></button>
   </header>
 
-  <!-- CLOCK VIEW -->
+  <!-- CLOCK -->
   <section id="view-clock" style="display:grid;gap:16px">
     <div class="face">
       <div class="face-row">
@@ -159,9 +57,7 @@ td.pay { color: var(--work); font-weight: 500; }
         <div class="date" id="date"></div>
       </div>
     </div>
-
     <div class="punches" id="punches"></div>
-
     <div>
       <div class="label" style="margin-bottom:6px" id="today-label">Today</div>
       <div class="stats">
@@ -170,383 +66,44 @@ td.pay { color: var(--work); font-weight: 500; }
         <div class="stat pay"><span class="label">Earned</span><b class="num" id="s-pay">$0.00</b></div>
       </div>
     </div>
-
     <div>
       <div class="label" style="margin-bottom:6px">Punches</div>
       <div class="log" id="log"></div>
     </div>
   </section>
 
-  <!-- TIMESHEET VIEW -->
+  <!-- TIMESHEET -->
   <section id="view-sheet" hidden style="gap:14px">
-    <div class="seg" role="group" aria-label="Period" id="seg">
-      <button data-p="week" aria-pressed="true">This week</button>
-      <button data-p="lastweek" aria-pressed="false">Last week</button>
-      <button data-p="month" aria-pressed="false">This month</button>
-      <button data-p="all" aria-pressed="false">All time</button>
-    </div>
-    <div class="totals">
-      <div class="total"><span class="label">Hours worked</span><b class="num" id="t-hours">0.00</b></div>
-      <div class="total money"><span class="label">Gross pay</span><b class="num" id="t-pay">$0.00</b></div>
-      <div class="total"><span class="label">Meal breaks</span><b class="num" id="t-meal">0:00</b></div>
-      <div class="total"><span class="label">Days worked</span><b class="num" id="t-days">0</b></div>
-    </div>
+    <div class="seg" role="group" aria-label="Period" data-seg></div>
+    <div class="totals" id="my-totals"></div>
     <div class="sheet-wrap" id="sheet"></div>
     <div class="hint">Tap a day to fix a missed or wrong punch. Weeks run Sunday to Saturday. Pay is before taxes.</div>
     <div class="rate-row">
       <label for="rate" class="label" style="color:var(--ink)">Hourly rate $</label>
       <input id="rate" type="number" inputmode="decimal" min="0" step="0.25" value="15">
+      <button class="btn" id="add-day">+ Add a day</button>
       <button class="btn" id="copy">Copy as CSV</button>
     </div>
   </section>
+
+  <!-- GROUP -->
+  <section id="view-group" hidden style="gap:14px"></section>
 </div>
 
-<nav class="tabs" role="tablist">
+<nav class="tabs" role="tablist" id="tabs" hidden>
   <div class="tabs-in">
-    <button class="tab" role="tab" aria-selected="true" data-v="clock" id="tab-clock">
+    <button class="tab" role="tab" aria-selected="true" data-v="clock">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Clock</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="sheet" id="tab-sheet">
+    <button class="tab" role="tab" aria-selected="false" data-v="sheet">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 9h17M3.5 14h17M9 9v11"/></svg>Timesheet</button>
+    <button class="tab" role="tab" aria-selected="false" data-v="group">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.2c2.3.2 4 1.7 4.5 4.3"/></svg>Group</button>
   </div>
 </nav>
 
 <div id="overlay-root"></div>
 <div id="toast-root"></div>
 
-<script>
-(() => {
-  const TYPES = {
-    in:        { name: "Clock in",   color: "var(--work)" },
-    mealStart: { name: "Meal start", color: "var(--meal)" },
-    mealEnd:   { name: "Meal end",   color: "var(--meal)" },
-    out:       { name: "Clock out",  color: "var(--stop)" },
-  };
-  const LS_KEY = "shiftpunch.v1";
-  const $ = (id) => document.getElementById(id);
-
-  // ---------- state ----------
-  let days = {};                      // { "YYYY-MM-DD": { events: [{t, at}] } }
-  let settings = { rate: 15, openDay: null };
-  let db = null, base = null;         // db + per-user path
-  let period = "week";
-
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) { const p = JSON.parse(raw); days = p.days || {}; settings = { ...settings, ...(p.settings || {}) }; }
-  } catch (e) {}
-  // Entries added by hand may carry a local clock time ("HH:MM", plus nextDay) instead of a timestamp.
-  function normEvents(k, events) {
-    const [y, m, d] = k.split("-").map(Number);
-    return (events || []).map((e) => {
-      if (typeof e.at === "number") return e;
-      if (typeof e.time !== "string") return null;
-      const [h, mi] = e.time.split(":").map(Number);
-      return { t: e.t, at: new Date(y, m - 1, d + (e.nextDay ? 1 : 0), h, mi).getTime() };
-    }).filter(Boolean);
-  }
-  const cacheLocal = () => { try { localStorage.setItem(LS_KEY, JSON.stringify({ days, settings })); } catch (e) {} };
-
-  // ---------- date helpers ----------
-  const pad = (n) => String(n).padStart(2, "0");
-  const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const dateOfKey = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
-  const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const hm = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return `${Math.floor(m / 60)}:${pad(m % 60)}`; };
-  const hrs = (ms) => (ms / 3600000);
-  const money = (n) => "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const weekStart = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - x.getDay()); return x; };
-
-  // ---------- core math ----------
-  function summarize(events, now) {
-    const ev = [...(events || [])].sort((a, b) => a.at - b.at);
-    let work = 0, meal = 0, ws = null, ms = null, first = null, last = null;
-    for (const e of ev) {
-      if (e.t === "in") { if (ws == null && ms == null) ws = e.at; if (first == null) first = e.at; }
-      else if (e.t === "mealStart") { if (ws != null) { work += e.at - ws; ws = null; } if (ms == null) ms = e.at; }
-      else if (e.t === "mealEnd") { if (ms != null) { meal += e.at - ms; ms = null; } if (ws == null) ws = e.at; }
-      else if (e.t === "out") { if (ws != null) { work += e.at - ws; ws = null; } if (ms != null) { meal += e.at - ms; ms = null; } last = e.at; }
-    }
-    const status = ms != null ? "meal" : ws != null ? "in" : "out";
-    if (now) { if (ws != null) work += now - ws; if (ms != null) meal += now - ms; }
-    return { work, meal, first, last, status, sorted: ev };
-  }
-  const rate = () => Number(settings.rate) || 0;
-
-  function currentStatus() {
-    const k = settings.openDay;
-    if (!k || !days[k]) return { status: "out", day: null };
-    const s = summarize(days[k].events);
-    const lastEv = s.sorted[s.sorted.length - 1];
-    return { status: s.status, day: k, since: lastEv ? lastEv.at : null };
-  }
-
-  // ---------- persistence ----------
-  async function saveDay(k) {
-    cacheLocal();
-    if (!db) return;
-    const ref = db.doc(`${base}/timesheet/days/${k}`);
-    try {
-      if (!days[k] || !days[k].events.length) await ref.delete();
-      else await ref.set({ events: days[k].events });
-    } catch (e) { showSync("Couldn't save to your account. Kept on this device."); }
-  }
-  async function saveSettings() {
-    cacheLocal();
-    if (!db) return;
-    try { await db.doc(`${base}/settings`).set({ rate: rate(), openDay: settings.openDay || null }); }
-    catch (e) { showSync("Couldn't save settings to your account."); }
-  }
-  function showSync(t) { $("sync").textContent = t; }
-
-  async function connect() {
-    if (!window.claude || !window.claude.use) return;
-    const [d, u] = await Promise.all([claude.use("db"), claude.use("user")]);
-    if (!d || !u) return;
-    const id = await u.id();
-    if (!id) return;
-    db = d; base = `data/users/${id}`;
-    showSync("Syncing…");
-    const timer = setTimeout(() => showSync("Can't reach your account yet. Saving on this device."), 10000);
-    let first = true;
-    db.collection(`${base}/timesheet/days`).onSnapshot((snap) => {
-      const remote = {};
-      snap.docs.forEach((doc) => { const v = doc.data(); if (v && Array.isArray(v.events)) remote[doc.id] = { events: normEvents(doc.id, v.events) }; });
-      if (first && !snap.metadata.fromCache) {
-        first = false;
-        // Push any punches made on this device before the account was reachable.
-        for (const k of Object.keys(days)) if (!remote[k] && days[k].events.length) { remote[k] = days[k]; db.doc(`${base}/timesheet/days/${k}`).set({ events: days[k].events }).catch(() => {}); }
-      }
-      days = remote; cacheLocal(); render();
-      if (!snap.metadata.fromCache) { clearTimeout(timer); showSync("Saved to your account"); }
-    }, () => { clearTimeout(timer); showSync("Sync stopped. Saving on this device."); });
-    db.doc(`${base}/settings`).onSnapshot((snap) => {
-      if (snap.exists) { const v = snap.data(); settings = { rate: v.rate ?? 15, openDay: v.openDay ?? null }; cacheLocal(); $("rate").value = rate(); render(); }
-      else if (!snap.metadata.fromCache) saveSettings();
-    }, () => {});
-  }
-
-  // ---------- actions ----------
-  let undoSnapshot = null;
-  function punch(t) {
-    const now = Date.now();
-    const cur = currentStatus();
-    let k = cur.day;
-    undoSnapshot = { k: k || keyOf(new Date(now)), events: k && days[k] ? [...days[k].events] : (days[keyOf(new Date(now))] ? [...days[keyOf(new Date(now))].events] : null), openDay: settings.openDay };
-    if (t === "in") { k = keyOf(new Date(now)); undoSnapshot.k = k; undoSnapshot.events = days[k] ? [...days[k].events] : null; settings.openDay = k; }
-    if (!k) return;
-    days[k] = days[k] || { events: [] };
-    days[k].events = [...days[k].events, { t, at: now }];
-    if (t === "out") settings.openDay = null;
-    saveDay(k); saveSettings(); render();
-    toast(`${TYPES[t].name} at ${fmtTime(now)}`, true);
-  }
-  function undo() {
-    if (!undoSnapshot) return;
-    const { k, events, openDay } = undoSnapshot;
-    if (events && events.length) days[k] = { events }; else delete days[k];
-    settings.openDay = openDay;
-    undoSnapshot = null;
-    saveDay(k); saveSettings(); render(); toast("Punch undone", false);
-  }
-
-  let toastTimer;
-  function toast(msg, withUndo) {
-    clearTimeout(toastTimer);
-    const root = $("toast-root");
-    root.innerHTML = "";
-    const el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status");
-    const span = document.createElement("span"); span.textContent = msg; el.appendChild(span);
-    if (withUndo) { const b = document.createElement("button"); b.textContent = "Undo"; b.onclick = undo; el.appendChild(b); }
-    root.appendChild(el);
-    toastTimer = setTimeout(() => { root.innerHTML = ""; }, 5000);
-  }
-
-  // ---------- render: clock ----------
-  function renderPunches(status) {
-    const p = $("punches");
-    const btn = (cls, t, label, sub) => `<button class="punch ${cls}" data-t="${t}">${label}<span>${sub}</span></button>`;
-    if (status === "out") p.innerHTML = btn("p-in", "in", "Clock in", "Start your shift");
-    else if (status === "in") p.innerHTML = btn("p-meal", "mealStart", "Start meal", "Go on break") + btn("p-out", "out", "Clock out", "End your shift");
-    else p.innerHTML = btn("p-meal wide", "mealEnd", "End meal", "Back to work") + btn("p-out wide", "out", "Clock out", "Ends meal and shift");
-    p.querySelectorAll("button").forEach((b) => b.onclick = () => punch(b.dataset.t));
-  }
-
-  let lastStatus = null, lastLogSig = "";
-  function renderClock() {
-    const now = new Date();
-    const t = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const m = t.match(/^(.*?)\s?([AaPp]\.?[Mm]\.?)$/);
-    $("now").innerHTML = m ? `${m[1]}<small>${m[2].toUpperCase()}</small>` : t;
-    $("date").textContent = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-
-    const cur = currentStatus();
-    const chip = $("chip");
-    chip.className = "chip " + cur.status;
-    chip.textContent = cur.status === "in" ? "On the clock" : cur.status === "meal" ? "On meal break" : "Off the clock";
-    $("since").textContent = cur.status !== "out" && cur.since ? `since ${fmtTime(cur.since)} · ${hm(now - cur.since)}` : "";
-    if (cur.status !== lastStatus) { renderPunches(cur.status); lastStatus = cur.status; }
-
-    const k = cur.day || keyOf(now);
-    $("today-label").textContent = cur.day && cur.day !== keyOf(now) ? `Shift started ${dateOfKey(cur.day).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : "Today";
-    const s = summarize(days[k] && days[k].events, cur.day ? now.getTime() : null);
-    $("s-work").textContent = hm(s.work);
-    $("s-meal").textContent = hm(s.meal);
-    $("s-pay").textContent = money(hrs(s.work) * rate());
-
-    const sig = k + JSON.stringify(s.sorted);
-    if (sig !== lastLogSig) {
-      lastLogSig = sig;
-      $("log").innerHTML = s.sorted.length
-        ? s.sorted.slice().reverse().map((e) => `<div class="log-row"><span><i class="dot" style="background:${TYPES[e.t].color}"></i>${TYPES[e.t].name}</span><span class="t num">${fmtTime(e.at)}</span></div>`).join("")
-        : `<div class="empty">No punches yet today. Tap <b>Clock in</b> when your shift starts.</div>`;
-    }
-  }
-
-  // ---------- render: timesheet ----------
-  function periodRange() {
-    const today = new Date();
-    if (period === "week") { const s = weekStart(today); const e = new Date(s); e.setDate(e.getDate() + 7); return [s, e]; }
-    if (period === "lastweek") { const e = weekStart(today); const s = new Date(e); s.setDate(s.getDate() - 7); return [s, e]; }
-    if (period === "month") return [new Date(today.getFullYear(), today.getMonth(), 1), new Date(today.getFullYear(), today.getMonth() + 1, 1)];
-    return [new Date(1970, 0, 1), new Date(9999, 0, 1)];
-  }
-
-  function rowsForPeriod() {
-    const [s, e] = periodRange();
-    const now = Date.now();
-    return Object.keys(days).filter((k) => { const d = dateOfKey(k); return d >= s && d < e && days[k].events.length; })
-      .sort().reverse()
-      .map((k) => ({ k, ...summarize(days[k].events, settings.openDay === k ? now : null), open: settings.openDay === k }));
-  }
-
-  function renderSheet() {
-    const rows = rowsForPeriod();
-    let tw = 0, tm = 0;
-    rows.forEach((r) => { tw += r.work; tm += r.meal; });
-    $("t-hours").textContent = hrs(tw).toFixed(2);
-    $("t-pay").textContent = money(hrs(tw) * rate());
-    $("t-meal").textContent = hm(tm);
-    $("t-days").textContent = rows.length;
-
-    if (!rows.length) {
-      $("sheet").innerHTML = `<div class="sheet-empty"><b>No shifts in this period</b><span>Clock in on the Clock tab and each day shows up here with hours, breaks and pay.</span></div>`;
-      return;
-    }
-    const groups = [];
-    rows.forEach((r) => {
-      const wk = keyOf(weekStart(dateOfKey(r.k)));
-      let g = groups[groups.length - 1];
-      if (!g || g.wk !== wk) { g = { wk, rows: [], w: 0, m: 0 }; groups.push(g); }
-      g.rows.push(r); g.w += r.work; g.m += r.meal;
-    });
-    const multiWeek = groups.length > 1 || period === "month" || period === "all";
-    let html = `<table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Meal</th><th>Worked</th><th>Hours</th><th>Pay</th></tr></thead><tbody>`;
-    for (const g of groups) {
-      for (const r of g.rows) {
-        const d = dateOfKey(r.k);
-        html += `<tr class="day${r.open ? " open" : ""}" data-k="${r.k}" tabindex="0">
-          <td>${d.toLocaleDateString([], { weekday: "short" })} ${d.getMonth() + 1}/${d.getDate()}${r.open ? "<small>In progress</small>" : ""}</td>
-          <td>${r.first ? fmtTime(r.first) : "—"}</td>
-          <td>${r.open ? "…" : r.last ? fmtTime(r.last) : "—"}</td>
-          <td>${hm(r.meal)}</td>
-          <td>${hm(r.work)}</td>
-          <td>${hrs(r.work).toFixed(2)}</td>
-          <td class="pay">${money(hrs(r.work) * rate())}</td></tr>`;
-      }
-      if (multiWeek) {
-        const ws = dateOfKey(g.wk);
-        html += `<tr class="week"><td>Week of ${ws.getMonth() + 1}/${ws.getDate()}</td><td></td><td></td><td>${hm(g.m)}</td><td>${hm(g.w)}</td><td>${hrs(g.w).toFixed(2)}</td><td class="pay">${money(hrs(g.w) * rate())}</td></tr>`;
-      }
-    }
-    html += `</tbody></table>`;
-    $("sheet").innerHTML = html;
-    $("sheet").querySelectorAll("tr.day").forEach((tr) => {
-      tr.onclick = () => openEditor(tr.dataset.k);
-      tr.onkeydown = (e) => { if (e.key === "Enter") openEditor(tr.dataset.k); };
-    });
-  }
-
-  // ---------- editor ----------
-  function openEditor(k) {
-    const d = dateOfKey(k);
-    let rows = summarize(days[k].events).sorted.map((e) => ({ t: e.t, time: `${pad(new Date(e.at).getHours())}:${pad(new Date(e.at).getMinutes())}`, nextDay: keyOf(new Date(e.at)) !== k }));
-    const root = $("overlay-root");
-    const draw = () => {
-      root.innerHTML = `<div class="overlay" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="ed-title">
-        <h2 id="ed-title">${d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</h2>
-        <div class="hint">Change a time or punch type, or remove a punch. A time earlier than the clock-in counts as the next morning.</div>
-        <div id="ed-rows" style="display:grid;gap:8px">${rows.map((r, i) => `<div class="ed-row">
-          <select id="ed-t-${i}" aria-label="Punch type">${Object.entries(TYPES).map(([v, o]) => `<option value="${v}"${v === r.t ? " selected" : ""}>${o.name}</option>`).join("")}</select>
-          <input id="ed-h-${i}" type="time" value="${r.time}" aria-label="Time">
-          <button class="x" data-i="${i}" aria-label="Remove punch">×</button></div>`).join("")}</div>
-        <button class="btn" id="ed-add">+ Add punch</button>
-        <div class="actions"><button class="btn danger" id="ed-del">Delete day</button><span style="flex:1"></span><button class="btn" id="ed-cancel">Cancel</button><button class="btn primary" id="ed-save">Save</button></div>
-      </div></div>`;
-      const pull = () => rows.forEach((r, i) => { r.t = $("ed-t-" + i).value; r.time = $("ed-h-" + i).value; });
-      root.querySelectorAll(".x").forEach((b) => b.onclick = () => { pull(); rows.splice(+b.dataset.i, 1); draw(); });
-      $("ed-add").onclick = () => { pull(); const lastT = rows.length ? rows[rows.length - 1].t : null; const next = { in: "mealStart", mealStart: "mealEnd", mealEnd: "out", out: "in" }[lastT] || "in"; rows.push({ t: next, time: rows.length ? rows[rows.length - 1].time : "09:00" }); draw(); };
-      $("ed-cancel").onclick = close;
-      $("ov").onclick = (e) => { if (e.target.id === "ov") close(); };
-      $("ed-del").onclick = () => {
-        const b = $("ed-del");
-        if (b.dataset.armed) { delete days[k]; if (settings.openDay === k) settings.openDay = null; saveDay(k); saveSettings(); close(); render(); toast("Day deleted", false); }
-        else { b.dataset.armed = "1"; b.textContent = "Tap again to delete"; }
-      };
-      $("ed-save").onclick = () => {
-        pull();
-        const valid = rows.filter((r) => r.time);
-        const firstIn = valid.find((r) => r.t === "in");
-        const toMs = (time) => { const [h, m] = time.split(":").map(Number); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime(); };
-        const startMs = firstIn ? toMs(firstIn.time) : null;
-        const events = valid.map((r) => { let at = toMs(r.time); if (startMs != null && at < startMs) at += 86400000; return { t: r.t, at }; }).sort((a, b) => a.at - b.at);
-        if (events.length) days[k] = { events }; else delete days[k];
-        const st = summarize(events).status;
-        if (st !== "out") settings.openDay = k; else if (settings.openDay === k) settings.openDay = null;
-        saveDay(k); saveSettings(); close(); render(); toast("Day updated", false);
-      };
-    };
-    const close = () => { root.innerHTML = ""; document.removeEventListener("keydown", esc); };
-    const esc = (e) => { if (e.key === "Escape") close(); };
-    document.addEventListener("keydown", esc);
-    draw();
-  }
-
-  // ---------- CSV ----------
-  $("copy").onclick = async () => {
-    const rows = rowsForPeriod().slice().reverse();
-    const lines = ["Date,Clock in,Clock out,Meal (h:mm),Worked (h:mm),Hours,Pay"];
-    rows.forEach((r) => lines.push([r.k, r.first ? fmtTime(r.first) : "", r.open ? "" : r.last ? fmtTime(r.last) : "", hm(r.meal), hm(r.work), hrs(r.work).toFixed(2), (hrs(r.work) * rate()).toFixed(2)].map((v) => `"${v}"`).join(",")));
-    const text = lines.join("\n");
-    try { await navigator.clipboard.writeText(text); toast("Timesheet copied. Paste it into a spreadsheet.", false); }
-    catch (e) { toast("Copy isn't allowed here.", false); }
-  };
-
-  // ---------- wiring ----------
-  function render() { renderClock(); if (!$("view-sheet").hidden) renderSheet(); }
-  function show(v) {
-    $("view-clock").hidden = v !== "clock";
-    $("view-sheet").hidden = v !== "sheet";
-    $("view-sheet").style.display = v === "sheet" ? "grid" : "";
-    $("tab-clock").setAttribute("aria-selected", v === "clock");
-    $("tab-sheet").setAttribute("aria-selected", v === "sheet");
-    if (v === "sheet") renderSheet();
-    try { localStorage.setItem(LS_KEY + ".tab", v); } catch (e) {}
-  }
-  document.querySelectorAll(".tab").forEach((b) => b.onclick = () => show(b.dataset.v));
-  $("seg").querySelectorAll("button").forEach((b) => b.onclick = () => {
-    period = b.dataset.p;
-    $("seg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
-    renderSheet();
-  });
-  $("rate").value = rate();
-  $("rate").onchange = () => { const v = parseFloat($("rate").value); settings.rate = isFinite(v) && v >= 0 ? v : 15; $("rate").value = rate(); saveSettings(); render(); };
-
-  let startTab = "clock";
-  try { startTab = localStorage.getItem(LS_KEY + ".tab") || "clock"; } catch (e) {}
-  show(startTab);
-  render();
-  let ticks = 0;
-  setInterval(() => { renderClock(); if (++ticks % 30 === 0 && !$("view-sheet").hidden && settings.openDay) renderSheet(); }, 1000);
-  connect();
-})();
-</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

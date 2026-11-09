@@ -1,0 +1,14 @@
+{
+  "name": "shift-punch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:rules": "firebase emulators:exec --only firestore --project demo-shiftpunch \"node tests/rules.test.mjs\"",
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-shiftpunch \"node tests/e2e.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "3.0.4",
+    "firebase": "10.12.2",
+    "firebase-tools": "13.29.1"
+  }
+}
